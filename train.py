@@ -14,13 +14,16 @@ def train_model(model, train_loader, val_loader, num_epochs=50, learning_rate=0.
     
     os.makedirs(save_dir, exist_ok=True)
     
-    # Loss functions - weighted for multiple faces
-    bbox_criterion = nn.MSELoss(reduction='none')  # We'll handle reduction manually
+    # Loss functions
+    bbox_criterion = nn.MSELoss(reduction='none')
     face_criterion = nn.BCELoss(reduction='none')
     
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', 
-                                                    patience=5, factor=0.5, verbose=True)
+    
+    # FIX: Removed verbose=True
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='min', patience=5, factor=0.5
+    )
     
     train_losses = []
     val_losses = []
@@ -29,12 +32,9 @@ def train_model(model, train_loader, val_loader, num_epochs=50, learning_rate=0.
     print(f"Starting multi-face training on {device}...")
     
     for epoch in range(num_epochs):
-        # Training
+        # ------------------ TRAIN ------------------
         model.train()
         train_loss = 0.0
-        train_bbox_loss = 0.0
-        train_face_loss = 0.0
-        
         start_time = time.time()
         
         for batch_idx, (images, bboxes, face_masks) in enumerate(train_loader):
@@ -46,33 +46,28 @@ def train_model(model, train_loader, val_loader, num_epochs=50, learning_rate=0.
             
             pred_bboxes, pred_faces = model(images)
             
-            # Calculate losses with masking
+            # BBox loss with masking
             bbox_loss = bbox_criterion(pred_bboxes, bboxes)
-            # Apply mask - only compute loss for actual faces
             bbox_loss = (bbox_loss * face_masks.unsqueeze(-1)).sum() / (face_masks.sum() + 1e-6)
             
+            # Face presence loss
             face_loss = face_criterion(pred_faces.squeeze(-1), face_masks)
             face_loss = face_loss.mean()
             
             total_loss = bbox_loss + face_loss
-            
             total_loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             
             train_loss += total_loss.item()
-            train_bbox_loss += bbox_loss.item()
-            train_face_loss += face_loss.item()
             
             if batch_idx % 20 == 0:
                 print(f'Epoch [{epoch+1}/{num_epochs}], Batch [{batch_idx}/{len(train_loader)}], '
                       f'Loss: {total_loss.item():.4f}')
         
-        # Validation
+        # ------------------ VALIDATION ------------------
         model.eval()
         val_loss = 0.0
-        val_bbox_loss = 0.0
-        val_face_loss = 0.0
         
         with torch.no_grad():
             for images, bboxes, face_masks in val_loader:
@@ -89,12 +84,9 @@ def train_model(model, train_loader, val_loader, num_epochs=50, learning_rate=0.
                 face_loss = face_loss.mean()
                 
                 total_loss = bbox_loss + face_loss
-                
                 val_loss += total_loss.item()
-                val_bbox_loss += bbox_loss.item()
-                val_face_loss += face_loss.item()
         
-        # Calculate averages
+        # ------------------ LOGGING ------------------
         avg_train_loss = train_loss / len(train_loader)
         avg_val_loss = val_loss / len(val_loader)
         
@@ -102,11 +94,8 @@ def train_model(model, train_loader, val_loader, num_epochs=50, learning_rate=0.
         val_losses.append(avg_val_loss)
         
         epoch_time = time.time() - start_time
-        
         print(f'\nEpoch [{epoch+1}/{num_epochs}] - Time: {epoch_time:.2f}s')
-        print(f'Train Loss: {avg_train_loss:.4f}')
-        print(f'Val Loss: {avg_val_loss:.4f}')
-        print(f'Detected faces in batch: {face_masks.sum().item()/face_masks.size(0):.1f} avg per image')
+        print(f'Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}')
         
         # Save best model
         if avg_val_loss < best_val_loss:
@@ -114,7 +103,7 @@ def train_model(model, train_loader, val_loader, num_epochs=50, learning_rate=0.
             torch.save(model.state_dict(), f'{save_dir}/best_model.pth')
             print(f'Saved best model with validation loss: {best_val_loss:.4f}')
         
-        # Save checkpoint
+        # Save checkpoint every 10 epochs
         if (epoch + 1) % 10 == 0:
             torch.save({
                 'epoch': epoch,
@@ -124,9 +113,10 @@ def train_model(model, train_loader, val_loader, num_epochs=50, learning_rate=0.
                 'val_loss': val_losses,
             }, f'{save_dir}/checkpoint_epoch_{epoch+1}.pth')
         
+        # Step scheduler
         scheduler.step(avg_val_loss)
     
-    # Plot training history
+    # ------------------ PLOT LOSSES ------------------
     plt.figure(figsize=(10, 5))
     plt.plot(train_losses, label='Training Loss')
     plt.plot(val_losses, label='Validation Loss')
