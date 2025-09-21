@@ -8,19 +8,28 @@ import torch
 from sklearn.model_selection import train_test_split
 from train import train_model
 import cv2
+import os
 
 
 def main():
+    # Detect dataset path automatically
+    if os.path.exists("/kaggle/input"):
+        # Kaggle dataset path
+        data_dir = "/kaggle/input/shanghaitech-crowd-counting-dataset/part_A_final/train_data"
+    else:
+        # Local Windows dataset path
+        data_dir = "C:/Users/maste/OneDrive/Documents/Final_year_project/Crowd_Analysis/Crowd_Monitoring/Dataset/shanghaitech-crowd-counting-dataset/versions/1/part_A_final/train_data"
+
     # Configuration for crowd analysis
     config = {
-        'data_dir': 'C:/Users/maste/OneDrive/Documents/Final_year_project/Crowd_Analysis/Crowd_Monitoring/Dataset/shanghaitech-crowd-counting-dataset/versions/1/part_A_final/train_data',
+        'data_dir': data_dir,
         'image_subdir': 'images',
         'annotation_subdir': 'ground_truth',
-        'batch_size': 8,  # Smaller batch size for multiple faces
+        'batch_size': 8,   # Smaller batch size for multiple faces
         'num_epochs': 100,
         'learning_rate': 0.0005,
-        'img_size': 512,  # Larger input for crowd scenes
-        'max_faces': 50,  # Maximum faces per image
+        'img_size': 512,   # Larger input for crowd scenes
+        'max_faces': 50,   # Maximum faces per image
         'test_size': 0.1,
         'random_state': 42
     }
@@ -93,11 +102,15 @@ def main():
     detector = MultiFaceDetector('crowd_checkpoints/best_model.pth')
     
     # Test on sample image
-    sample_image_path = list(image_dir.glob('*.jpg'))[0]
-    if sample_image_path:
+    sample_images = list(image_dir.glob('*.jpg'))
+    if sample_images:
+        sample_image_path = sample_images[0]
         image = cv2.imread(str(sample_image_path))
         faces = detector.detect_faces(image)
         print(f"Detected {len(faces)} faces in sample image")
+    else:
+        print("⚠️ No sample images found in dataset.")
+
 
 if __name__ == "__main__":
     main()
