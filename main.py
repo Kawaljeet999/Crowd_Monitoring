@@ -13,7 +13,7 @@ import cv2
 def main():
     # Configuration for crowd analysis
     config = {
-        'data_dir': '/content/shanghaitech_dataset/part_A_final/train_data',
+        'data_dir': 'shanghaitech_dataset/shanghaitech-crowd-counting-dataset/versions/1/part_A_final/train_data/images',
         'image_subdir': 'images',
         'annotation_subdir': 'ground_truth',
         'batch_size': 8,  # Smaller batch size for multiple faces
