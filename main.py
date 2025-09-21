@@ -11,10 +11,22 @@ import cv2
 import os
 
 def main():
+    # ==================== AUTO-DETECT DATASET PATH ====================
+    # Base folder where the dataset zip was extracted
+    base_folder = "/content/shanghaitech_dataset"
+
+    # Find the dataset folder automatically (handles variable folder names)
+    dataset_folder_list = [f for f in os.listdir(base_folder) if "shanghaitech" in f.lower()]
+    if len(dataset_folder_list) == 0:
+        raise ValueError(f"No folder containing 'shanghaitech' found in {base_folder}")
+    dataset_folder = dataset_folder_list[0]
+
+    # Construct full path to train_data
+    data_dir = os.path.join(base_folder, dataset_folder, "versions", "1", "part_A_final", "train_data")
+
     # ==================== CONFIGURATION ====================
     config = {
-        # Path to the parent train_data folder (do NOT include 'images')
-        'data_dir': 'shanghaitech_dataset/shanghaitech-crowd-counting-dataset/versions/1/part_A_final/train_data',
+        'data_dir': data_dir,
         'image_subdir': 'images',
         'annotation_subdir': 'ground_truth',
         'batch_size': 8,
@@ -30,15 +42,16 @@ def main():
     image_dir = Path(config['data_dir']) / config['image_subdir']
     annotation_dir = Path(config['data_dir']) / config['annotation_subdir']
 
-    # Check if folders exist
+    # Verify paths
     if not image_dir.exists():
         raise ValueError(f"Image directory not found: {image_dir}")
     if not annotation_dir.exists():
         raise ValueError(f"Annotation directory not found: {annotation_dir}")
 
-    print(f"Setting up for crowd analysis with up to {config['max_faces']} faces per image")
+    print(f"✅ Using dataset folder: {dataset_folder}")
     print(f"Image directory: {image_dir}")
     print(f"Annotation directory: {annotation_dir}")
+    print(f"Setting up for crowd analysis with up to {config['max_faces']} faces per image")
 
     # ==================== CREATE DATASET ====================
     dataset = MultiFaceDataset(
@@ -91,17 +104,20 @@ def main():
         save_dir='crowd_checkpoints'
     )
 
-    print("Crowd analysis training completed!")
+    print("✅ Crowd analysis training completed!")
 
     # ==================== TEST THE DETECTOR ====================
     detector = MultiFaceDetector('crowd_checkpoints/best_model.pth')
 
     # Test on a sample image
-    sample_image_path = list(image_dir.glob('*.jpg'))[0]
-    if sample_image_path:
+    sample_images = list(image_dir.glob('*.jpg'))
+    if len(sample_images) == 0:
+        print("No .jpg images found in the dataset to test.")
+    else:
+        sample_image_path = sample_images[0]
         image = cv2.imread(str(sample_image_path))
         faces = detector.detect_faces(image)
-        print(f"Detected {len(faces)} faces in sample image")
+        print(f"Detected {len(faces)} faces in sample image: {sample_image_path.name}")
 
 
 if __name__ == "__main__":
